@@ -301,6 +301,12 @@
       margin-top: 2px;
       min-height: 1em;
     }
+    /* 최종 추천 결과 표시 시 — 카테고리 이름 크기(0.98rem)만큼 키우고 강조 */
+    .result-sub.result {
+      font-size: 0.98rem;
+      font-weight: 800;
+      color: var(--ink);
+    }
 
     /* ===================== 버튼들 ===================== */
     .actions { display: flex; flex-direction: column; gap: 10px; }
@@ -683,6 +689,7 @@
       isSpinning = true;
       againBtn.disabled = true;
       resultActions.classList.add("hidden");
+      resultSub.classList.remove("result");   // 추첨 중엔 작은 안내문구로
       resultSub.textContent = "두구두구...";
 
       const pool = MENU_DATA[selectedCategory].subgroups[selectedSubgroup];
@@ -751,6 +758,7 @@
       againBtn.disabled = false;
 
       resultSub.textContent = "🍴 오늘의 추천: " + menu;
+      resultSub.classList.add("result");   // 결과 텍스트 크게 강조
       resultActions.classList.remove("hidden");
       log("최종 추천:", menu);
     }
