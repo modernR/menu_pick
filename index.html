@@ -298,10 +298,10 @@
     .result-sub {
       font-size: 0.8rem;
       color: var(--ink-soft);
-      margin-top: 2px;
+      margin-top: 14px;          /* 룰렛 칸과 떨어뜨려 여백 가운데 느낌 */
       min-height: 1em;
     }
-    /* 최종 추천 결과 표시 시 — 카테고리 이름 크기(0.98rem)만큼 키우고 강조 */
+    /* 추첨 중/최종 결과 표시 시 — 카테고리 이름 크기(0.98rem)만큼 키우고 강조 */
     .result-sub.result {
       font-size: 0.98rem;
       font-weight: 800;
@@ -652,6 +652,7 @@
       slotCard.classList.remove("hidden");
       resultActions.classList.add("hidden");
       resetBtn.classList.remove("hidden");
+      resultSub.classList.remove("result");   // 준비 안내는 작은 글씨
       resultSub.textContent = groupKey + " · 준비 완료!";
 
       // 선택한 서브그룹 메뉴들로 룰렛 칸 깔기
@@ -689,7 +690,7 @@
       isSpinning = true;
       againBtn.disabled = true;
       resultActions.classList.add("hidden");
-      resultSub.classList.remove("result");   // 추첨 중엔 작은 안내문구로
+      resultSub.classList.add("result");   // 추첨 중에도 큰 글씨 유지
       resultSub.textContent = "두구두구...";
 
       const pool = MENU_DATA[selectedCategory].subgroups[selectedSubgroup];
