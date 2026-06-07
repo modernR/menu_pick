@@ -159,14 +159,22 @@
     .cat-btn.selected .num { background: var(--primary); color: #fff; }
     .cat-btn.selected .count { background: #fff; }
 
+    /* ===================== 드릴다운 패널 (아코디언) ===================== */
+    /* 선택한 카테고리 카드 바로 아래에 끼어들어가는 묶음 (서브그룹 + 룰렛 + 버튼) */
+    .drilldown-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin: 4px 0 6px;
+      animation: dropIn 0.35s ease;
+    }
+
     /* ===================== 2차: 서브그룹 선택 ===================== */
     .subgroup-section {
       background: rgba(255, 255, 255, 0.55);
       border: 2px solid var(--primary-light);
       border-radius: var(--radius);
       padding: 14px;
-      /* 1차 선택 후 등장 시 부드럽게 펼쳐지는 효과 */
-      animation: dropIn 0.35s ease;
     }
     @keyframes dropIn {
       from { opacity: 0; transform: translateY(-10px); }
@@ -236,43 +244,48 @@
       background: linear-gradient(90deg, var(--primary), #ffa07a);
     }
 
-    .slot-hint { color: var(--ink-soft); font-size: 0.88rem; }
-
-    /* 슬롯 릴: 메뉴 이름이 빠르게 바뀌는 영역 */
-    .slot-window {
-      height: 64px;
+    /* ===================== 룰렛 (빙고판 스타일 하이라이트) ===================== */
+    /* 선택한 서브그룹의 메뉴들을 칸으로 깔고, 빛(하이라이트)이 랜덤하게 칸을 옮겨다님 */
+    .roulette {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;   /* 3열 빙고판 느낌 */
+      gap: 6px;
+      width: 100%;
+    }
+    .roul-cell {
+      background: #faf2f0;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      padding: 10px 4px;
+      min-height: 46px;
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 100%;
-      overflow: hidden;
-    }
-    .slot-text {
-      font-size: clamp(1.7rem, 8vw, 2.3rem);
-      font-weight: 800;
-      letter-spacing: -0.5px;
+      text-align: center;
+      font-size: 0.84rem;
+      font-weight: 700;
       color: var(--ink);
       line-height: 1.1;
+      word-break: keep-all;
+      transition: background 0.05s linear, color 0.05s linear, transform 0.05s linear;
     }
-    /* 슬롯이 돌아갈 때 살짝 흐릿하게 흔들리는 효과 */
-    .slot-text.spinning {
-      animation: slotBlur 0.09s linear infinite;
-      color: var(--primary-dark);
+    /* 빛이 머무는 칸 (이동 중 하이라이트) */
+    .roul-cell.lit {
+      background: var(--primary);
+      color: #fff;
+      transform: scale(1.06);
     }
-    @keyframes slotBlur {
-      0%   { transform: translateY(-6px); opacity: 0.55; filter: blur(0.4px); }
-      50%  { transform: translateY(0);    opacity: 1;    filter: blur(0); }
-      100% { transform: translateY(6px);  opacity: 0.55; filter: blur(0.4px); }
-    }
-    /* 최종 당첨 시 통통 튀는 효과 */
-    .slot-text.win {
-      animation: pop 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-      color: var(--primary-dark);
+    /* 최종 당첨 칸 */
+    .roul-cell.win {
+      background: var(--primary-dark);
+      color: #fff;
+      border-color: var(--primary-dark);
+      animation: pop 0.45s cubic-bezier(0.18, 0.89, 0.32, 1.28);
     }
     @keyframes pop {
-      0%   { transform: scale(0.4); opacity: 0; }
-      60%  { transform: scale(1.12); opacity: 1; }
-      100% { transform: scale(1); }
+      0%   { transform: scale(1); }
+      45%  { transform: scale(1.18); }
+      100% { transform: scale(1.06); }
     }
 
     .result-sub {
@@ -376,33 +389,34 @@
 
     <!-- STEP 1: 선택 방식(카테고리) -->
     <div class="step-label">STEP 1 · 어떤 방식으로 메뉴를 선택해 볼까요?</div>
-    <div class="category-grid" id="categoryGrid">
-      <!-- 카테고리 버튼은 JS가 동적으로 생성 -->
-    </div>
+    <!-- 카테고리 버튼은 JS가 생성. 선택 시 drilldownPanel을 해당 버튼 바로 아래로 이동시킴(아코디언). -->
+    <div class="category-grid" id="categoryGrid"></div>
 
-    <!-- STEP 2: 서브그룹 선택 (1차 선택 후 등장) -->
-    <div class="subgroup-section hidden" id="subgroupSection">
-      <div class="step-label" id="subgroupLabel">STEP 2 · 세부 항목을 골라주세요</div>
-      <div class="subgroup-grid" id="subgroupGrid">
-        <!-- 서브그룹 버튼은 JS가 동적으로 생성 -->
+    <!--
+      드릴다운 패널: STEP2(서브그룹) + 슬롯/결과를 한 묶음으로.
+      평소 categoryGrid 맨 아래에 두되, 1차 선택 시 선택된 카드 바로 다음 위치로 JS가 옮긴다.
+    -->
+    <div class="drilldown-panel hidden" id="drilldownPanel">
+      <!-- STEP 2: 서브그룹 선택 -->
+      <div class="subgroup-section" id="subgroupSection">
+        <div class="step-label" id="subgroupLabel">STEP 2 · 세부 항목을 골라주세요</div>
+        <div class="subgroup-grid" id="subgroupGrid"></div>
       </div>
-    </div>
 
-    <!-- STEP 3: 슬롯 + 결과 (서브그룹 선택 후 등장) -->
-    <div class="slot-card hidden" id="slotCard">
-      <div class="slot-window">
-        <div class="slot-text" id="slotText">?</div>
+      <!-- STEP 3: 룰렛 + 결과 -->
+      <div class="slot-card hidden" id="slotCard">
+        <div class="roulette" id="roulette"></div>
+        <div class="result-sub" id="resultSub">세부 항목을 고르면 메뉴를 뽑아드려요</div>
       </div>
-      <div class="result-sub" id="resultSub">세부 항목을 고르면 메뉴를 뽑아드려요</div>
-    </div>
 
-    <div class="actions">
-      <button class="btn btn-primary hidden" id="pickBtn" disabled>🎰 메뉴 뽑기</button>
-      <div class="btn-row hidden" id="resultActions">
-        <button class="btn btn-ghost" id="againBtn">🔄 다시 뽑기</button>
-        <button class="btn btn-ghost" id="shareBtn">📋 공유·복사</button>
+      <div class="actions">
+        <button class="btn btn-primary hidden" id="pickBtn" disabled>🎰 메뉴 뽑기</button>
+        <div class="btn-row hidden" id="resultActions">
+          <button class="btn btn-ghost" id="againBtn">🔄 다시 뽑기</button>
+          <button class="btn btn-ghost" id="shareBtn">📋 공유·복사</button>
+        </div>
+        <button class="btn btn-ghost hidden" id="resetBtn">↩︎ 처음부터 다시 고르기</button>
       </div>
-      <button class="btn btn-ghost hidden" id="resetBtn">↩︎ 처음부터 다시 고르기</button>
     </div>
 
     <!-- 추천 히스토리 -->
@@ -477,11 +491,12 @@
 
     /* ----- DOM 참조 ----- */
     const categoryGrid    = document.getElementById("categoryGrid");
+    const drilldownPanel  = document.getElementById("drilldownPanel");
     const subgroupSection = document.getElementById("subgroupSection");
     const subgroupGrid    = document.getElementById("subgroupGrid");
     const subgroupLabel   = document.getElementById("subgroupLabel");
     const slotCard        = document.getElementById("slotCard");
-    const slotText        = document.getElementById("slotText");
+    const roulette        = document.getElementById("roulette");
     const resultSub       = document.getElementById("resultSub");
     const pickBtn         = document.getElementById("pickBtn");
     const resultActions   = document.getElementById("resultActions");
@@ -495,8 +510,10 @@
     /* ----- 앱 상태 ----- */
     let selectedCategory = null;   // 1차 선택: 카테고리 키
     let selectedSubgroup = null;   // 2차 선택: 서브그룹 키 (찌개/특식 등)
-    let isSpinning = false;        // 슬롯 회전 중 여부 (중복 클릭 방지)
+    let isSpinning = false;        // 룰렛 회전 중 여부 (중복 클릭 방지)
     let lastResult = null;         // 마지막 추천 메뉴 (공유용)
+    // 서브그룹별 직전 결과를 기억 → 같은 그룹에서 연속 추첨 시 동일 결과 회피
+    const lastResultBySub = {};
     const history = [];            // 최근 추천 기록 (최대 8개)
 
     /* getPool(cat): 카테고리 전체 고유 메뉴 수 계산용 (버튼 라벨 표시에만 사용) */
@@ -529,6 +546,8 @@
 
     /*
      * 1차: 카테고리 버튼 렌더링. (표시 순서: 카테고리 → 상황 → 재료)
+     * 각 버튼을 .cat-row wrapper로 감싸서, 선택 시 그 wrapper 바로 뒤에
+     * 드릴다운 패널(STEP2 + 룰렛)을 끼워넣을 수 있게 한다(아코디언).
      */
     function renderCategories() {
       categoryGrid.innerHTML = "";
@@ -536,6 +555,10 @@
       order.forEach((key, i) => {
         const cat = MENU_DATA[key];
         const count = getPool(key).length;
+
+        const row = document.createElement("div");
+        row.className = "cat-row";
+        row.dataset.rowKey = key;
 
         const btn = document.createElement("button");
         btn.className = "cat-btn";
@@ -550,14 +573,16 @@
           '</span>' +
           '<span class="count">' + count + '종</span>';
         btn.addEventListener("click", () => selectCategory(key));
-        categoryGrid.appendChild(btn);
+
+        row.appendChild(btn);
+        categoryGrid.appendChild(row);
       });
       log("카테고리 렌더 완료:", order.length, "개");
     }
 
     /*
-     * 1차 선택 처리: 카테고리 선택 → 해당 카테고리의 서브그룹 버튼들을 렌더링하고
-     * 2차 선택 영역을 노출. (슬롯/결과 영역은 다시 숨김)
+     * 1차 선택 처리: 카테고리 선택 → 드릴다운 패널을 "선택한 카드 바로 아래"로 이동시키고
+     * 서브그룹 버튼을 렌더링해 노출. (룰렛/결과 영역은 다시 숨김)
      */
     function selectCategory(key) {
       if (isSpinning) return;
@@ -570,16 +595,19 @@
         b.classList.toggle("selected", b.dataset.key === key);
       });
 
-      // 슬롯/결과/뽑기 버튼 초기화 (이전 선택 흔적 제거)
+      // 드릴다운 패널을 선택한 카테고리 row 바로 뒤로 이동 (아코디언 핵심)
+      const row = categoryGrid.querySelector('.cat-row[data-row-key="' + key + '"]');
+      row.insertAdjacentElement("afterend", drilldownPanel);
+      drilldownPanel.classList.remove("hidden");
+
+      // 룰렛/결과/뽑기 버튼 초기화 (이전 선택 흔적 제거)
       slotCard.classList.add("hidden");
       pickBtn.classList.add("hidden");
       resultActions.classList.add("hidden");
       resetBtn.classList.add("hidden");
-      slotText.textContent = "?";
-      slotText.className = "slot-text";
+      roulette.innerHTML = "";
 
       renderSubgroups(key);
-      subgroupSection.classList.remove("hidden");
 
       // 2차 선택지가 화면에 나타날 때 그 위치로 포커싱
       focusElement(subgroupSection);
@@ -622,7 +650,7 @@
         b.classList.toggle("selected", b.dataset.group === groupKey);
       });
 
-      // 슬롯/뽑기 버튼 노출
+      // 룰렛/뽑기 버튼 노출
       slotCard.classList.remove("hidden");
       pickBtn.classList.remove("hidden");
       pickBtn.disabled = false;
@@ -630,16 +658,36 @@
       resultActions.classList.add("hidden");
       resetBtn.classList.remove("hidden");
       resultSub.textContent = groupKey + " · 준비 완료!";
-      slotText.textContent = "?";
-      slotText.className = "slot-text";
 
-      // 슬롯 영역으로 포커싱 후 자동 추첨 시작
+      // 선택한 서브그룹 메뉴들로 룰렛 칸 깔기
+      buildRoulette(MENU_DATA[selectedCategory].subgroups[groupKey]);
+
+      // 룰렛 영역으로 포커싱 후 자동 추첨 시작
       focusElement(slotCard);
       setTimeout(spin, 280);
     }
 
     /*
-     * spin(): 슬롯/빙고 애니메이션과 함께 "선택된 서브그룹 안에서" 메뉴를 추출.
+     * buildRoulette(pool): 룰렛 칸(메뉴 셀)을 그린다. 각 셀에 data-idx 부여.
+     */
+    function buildRoulette(pool) {
+      roulette.innerHTML = "";
+      pool.forEach((menu, idx) => {
+        const cell = document.createElement("div");
+        cell.className = "roul-cell";
+        cell.dataset.idx = idx;
+        cell.textContent = menu;
+        roulette.appendChild(cell);
+      });
+    }
+
+    /*
+     * spin(): 룰렛 하이라이트 애니메이션.
+     * 요구사항 반영:
+     *  - 빛이 "랜덤한 칸"으로 이동 (순차 아님)
+     *  - 일정하게 "빠른" 속도 유지 (뒤로 갈수록 느려지지 않음)
+     *  - 직전 결과와 동일한 메뉴가 나오지 않도록 회피
+     *  - 마지막에 당첨 칸에서 멈춤
      */
     function spin() {
       if (!selectedCategory || !selectedSubgroup || isSpinning) return;
@@ -649,41 +697,71 @@
       resultActions.classList.add("hidden");
       resultSub.textContent = "두구두구...";
 
-      // 핵심: 카테고리 전체가 아니라 선택한 서브그룹 배열만 풀로 사용
       const pool = MENU_DATA[selectedCategory].subgroups[selectedSubgroup];
-      const finalMenu = pickRandom(pool);
-      log("슬롯 시작:", selectedCategory, ">", selectedSubgroup, "(", pool.length, "종 )");
+      const cells = roulette.querySelectorAll(".roul-cell");
 
-      slotText.className = "slot-text spinning";
-
-      const startTime = performance.now();
-      const totalDuration = 2000;
-      let nextTick = 0;
-
-      function frame(now) {
-        const elapsed = now - startTime;
-        if (elapsed >= totalDuration) { finishSpin(finalMenu); return; }
-        const progress = elapsed / totalDuration;
-        const interval = 40 + progress * progress * 180;   // 감속 연출
-        if (now >= nextTick) {
-          slotText.textContent = pickRandom(pool);
-          nextTick = now + interval;
+      // --- 최종 당첨 인덱스 결정: 직전 결과와 다르게 ---
+      const prev = lastResultBySub[selectedSubgroup];
+      let finalIdx = Math.floor(Math.random() * pool.length);
+      // 풀이 2개 이상이면 직전과 같은 메뉴는 다시 뽑힐 때까지 재추첨
+      if (pool.length > 1 && prev != null) {
+        let guard = 0;
+        while (pool[finalIdx] === prev && guard < 50) {
+          finalIdx = Math.floor(Math.random() * pool.length);
+          guard++;
         }
-        requestAnimationFrame(frame);
       }
-      requestAnimationFrame(frame);
+      const finalMenu = pool[finalIdx];
+      log("룰렛 시작:", selectedSubgroup, "(", pool.length, "종 ) → 당첨:", finalMenu, "직전:", prev);
+
+      // --- 룰렛 진행: 일정한 빠른 간격으로 랜덤 칸 점등 ---
+      const STEP_MS = 80;        // 칸 이동 간격(고정) — 빠르고 일정
+      const TOTAL_STEPS = 22;    // 총 이동 횟수 (약 1.8초)
+      let step = 0;
+      let litIdx = -1;           // 현재 켜진 칸
+
+      function clearAll() {
+        cells.forEach((c) => c.classList.remove("lit"));
+      }
+
+      const timer = setInterval(() => {
+        clearAll();
+
+        if (step >= TOTAL_STEPS) {
+          // 마지막엔 당첨 칸을 켜고 종료
+          clearInterval(timer);
+          finishSpin(finalIdx, finalMenu);
+          return;
+        }
+
+        // 다음 켤 칸: 직전에 켠 칸과 겹치지 않는 "랜덤" 칸 (제자리 깜빡임 방지)
+        let next = Math.floor(Math.random() * cells.length);
+        if (cells.length > 1) {
+          let guard = 0;
+          while (next === litIdx && guard < 20) {
+            next = Math.floor(Math.random() * cells.length);
+            guard++;
+          }
+        }
+        litIdx = next;
+        cells[next].classList.add("lit");
+        step++;
+      }, STEP_MS);
     }
 
-    /* 슬롯 종료 처리: 최종 메뉴 확정 + 후속 UI */
-    function finishSpin(menu) {
-      slotText.textContent = menu;
-      slotText.className = "slot-text win";
+    /* 룰렛 종료 처리: 당첨 칸 강조 + 최종 메뉴 확정 + 후속 UI */
+    function finishSpin(finalIdx, menu) {
+      const cells = roulette.querySelectorAll(".roul-cell");
+      cells.forEach((c) => c.classList.remove("lit"));
+      if (cells[finalIdx]) cells[finalIdx].classList.add("win");
+
       lastResult = menu;
+      lastResultBySub[selectedSubgroup] = menu;   // 다음 추첨 중복 회피용 기록
       isSpinning = false;
       pickBtn.disabled = false;
       againBtn.disabled = false;
 
-      resultSub.textContent = "🍴 " + selectedSubgroup + " 추천 메뉴";
+      resultSub.textContent = "🍴 오늘의 추천: " + menu;
       resultActions.classList.remove("hidden");
 
       addHistory(menu);
@@ -696,11 +774,14 @@
       selectedCategory = null;
       selectedSubgroup = null;
       document.querySelectorAll(".cat-btn").forEach((b) => b.classList.remove("selected"));
-      subgroupSection.classList.add("hidden");
+      drilldownPanel.classList.add("hidden");
       slotCard.classList.add("hidden");
       pickBtn.classList.add("hidden");
       resultActions.classList.add("hidden");
       resetBtn.classList.add("hidden");
+      roulette.innerHTML = "";
+      // 패널을 다시 그리드 맨 끝으로 되돌림 (다음 선택을 위해)
+      categoryGrid.appendChild(drilldownPanel);
       log("초기화(처음부터)");
       focusElement(categoryGrid);
     }
@@ -721,40 +802,37 @@
     }
 
     /*
-     * 공유·복사: Web Share API 우선 사용(모바일), 미지원 시 클립보드 복사.
+     * 공유·복사: 현재 페이지 URL을 클립보드에 복사하고,
+     * 버튼 라벨을 잠깐 "URL copied"로 바꿨다가 원래대로 되돌린다.
      */
+    let shareLabelTimer = null;
     async function shareResult() {
-      if (!lastResult) return;
-      const text = "오늘 뭐 먹지? 🍱 추천 메뉴: " + lastResult +
-                   " (" + MENU_DATA[selectedCategory].label + " › " + selectedSubgroup + ")";
-      log("공유 시도:", text);
+      const url = location.href;
+      log("URL 복사 시도:", url);
 
-      // 1순위: 네이티브 공유 시트 (모바일)
-      if (navigator.share) {
-        try {
-          await navigator.share({ title: "오늘 뭐 먹지?", text });
-          log("Web Share 성공");
-          return;
-        } catch (e) {
-          log("Web Share 취소/실패 → 클립보드로 폴백", e);
-        }
-      }
-
-      // 2순위: 클립보드 복사
+      let ok = false;
+      // 1순위: Clipboard API
       try {
-        await navigator.clipboard.writeText(text);
-        showToast("복사되었습니다 ✓");
-        log("클립보드 복사 성공");
+        await navigator.clipboard.writeText(url);
+        ok = true;
       } catch (e) {
-        // 3순위: execCommand 폴백 (구형 브라우저)
+        // 2순위: execCommand 폴백 (구형/비보안 컨텍스트)
         const ta = document.createElement("textarea");
-        ta.value = text;
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
         document.body.appendChild(ta);
         ta.select();
-        try { document.execCommand("copy"); showToast("복사되었습니다 ✓"); }
-        catch (e2) { showToast("복사 실패 😢"); log("복사 실패", e2); }
+        try { ok = document.execCommand("copy"); } catch (e2) { log("복사 실패", e2); }
         document.body.removeChild(ta);
       }
+
+      // 버튼 라벨 임시 변경 → 1.5초 후 원복
+      const original = "📋 공유·복사";
+      shareBtn.textContent = ok ? "✓ URL copied" : "복사 실패 😢";
+      clearTimeout(shareLabelTimer);
+      shareLabelTimer = setTimeout(() => { shareBtn.textContent = original; }, 1500);
+      log("URL 복사 결과:", ok);
     }
 
     /* 토스트 메시지 표시 */
