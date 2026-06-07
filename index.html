@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<!--
+  =====================================================================
+  오늘 뭐 먹지? - 자취생 메뉴 랜덤 추천 (PickMenu)
+  ---------------------------------------------------------------------
+  • 단일 HTML 파일로 동작 (외부 빌드/의존성 없음 → GitHub Pages 바로 배포)
+  • 동작 흐름:
+      1) 사용자가 3개 카테고리 중 하나를 선택 (1차 진입 조건)
+         - 종합메뉴 / 재료별메뉴 / 상황별메뉴
+      2) 슬롯/빙고 스타일 애니메이션으로 해당 카테고리 내 메뉴를 랜덤 추출
+      3) 결과 표시 → 다시 추출 / 공유·복사 / 카테고리 변경 가능
+  • 모바일 최적화 최우선 (반응형, 터치 타깃 크게, viewport 고정)
+  • 데이터는 하단 <script>의 MENU_DATA 객체에 내장 (이미지 3장에서 추출)
+  =====================================================================
+-->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <!-- 모바일 최적화: 기기 너비에 맞추고 사용자 확대 허용 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ff6b5b" />
+  <meta name="description" content="자취생을 위한 오늘의 메뉴 랜덤 추천. 종합·재료별·상황별로 골라보세요." />
+  <title>오늘 뭐 먹지? 🍱 자취생 메뉴 추천</title>
+
+  <style>
+    /* ===================== 디자인 토큰 (색/간격) ===================== */
+    :root {
+      --bg-1: #fff5f3;          /* 배경 그라데이션 시작 */
+      --bg-2: #ffe3dd;          /* 배경 그라데이션 끝 */
+      --primary: #ff6b5b;       /* 포인트 컬러 (빙고판 화살표 톤) */
+      --primary-dark: #e8503f;
+      --primary-light: #ffd9d2;
+      --ink: #3a2c29;           /* 본문 텍스트 */
+      --ink-soft: #8a7470;      /* 보조 텍스트 */
+      --card: #ffffff;
+      --shadow: 0 10px 30px rgba(232, 80, 63, 0.18);
+      --radius: 22px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                   "Pretendard", "Noto Sans KR", "맑은 고딕", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 100%);
+      background-attachment: fixed;
+      min-height: 100dvh;            /* 모바일 동적 뷰포트 높이 */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 18px calc(24px + var(--safe-bottom));
+    }
+
+    /* 전체 콘텐츠는 모바일 폭(최대 460px) 기준으로 중앙 정렬 */
+    .app {
+      width: 100%;
+      max-width: 460px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* ===================== 헤더 ===================== */
+    header { text-align: center; margin-top: 4px; }
+    header h1 {
+      font-size: clamp(1.5rem, 6vw, 2rem);
+      margin: 0 0 6px;
+      letter-spacing: -0.5px;
+      font-weight: 800;
+    }
+    header p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.92rem;
+    }
+    header .welcome {
+      line-height: 1.5;
+      font-size: 0.9rem;
+    }
+
+    /* ===================== 카테고리 선택 ===================== */
+    .step-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      letter-spacing: 0.4px;
+      text-align: center;
+      margin-bottom: -6px;
+    }
+
+    .category-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    /* 선택 방식 버튼: 번호 + 이모지 + 이름/설명 + 메뉴 수 (가로 배치) */
+    .cat-btn {
+      appearance: none;
+      border: 2px solid transparent;
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: transform 0.12s ease, border-color 0.15s ease, background 0.15s ease;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 12px;
+      min-height: 64px;           /* 터치 타깃 충분히 크게 */
+      font-family: inherit;
+      text-align: left;
+    }
+    .cat-btn:active { transform: scale(0.98); }
+    .cat-btn .num {
+      flex: 0 0 26px;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      font-weight: 800;
+      font-size: 0.85rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cat-btn .emoji { font-size: 1.6rem; line-height: 1; flex: 0 0 auto; }
+    .cat-btn .cat-text {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .cat-btn .name {
+      font-size: 0.98rem;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .cat-btn .desc { font-size: 0.76rem; color: var(--ink-soft); }
+    .cat-btn .count {
+      flex: 0 0 auto;
+      font-size: 0.68rem;
+      color: var(--ink-soft);
+      background: #faf2f0;
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+    .cat-btn.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+    .cat-btn.selected .num { background: var(--primary); color: #fff; }
+    .cat-btn.selected .count { background: #fff; }
+
+    /* ===================== 2차: 서브그룹 선택 ===================== */
+    .subgroup-section {
+      background: rgba(255, 255, 255, 0.55);
+      border: 2px solid var(--primary-light);
+      border-radius: var(--radius);
+      padding: 14px;
+      /* 1차 선택 후 등장 시 부드럽게 펼쳐지는 효과 */
+      animation: dropIn 0.35s ease;
+    }
+    @keyframes dropIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .subgroup-section .step-label { margin-bottom: 12px; }
+    .subgroup-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;   /* 3x3 배열 (서브그룹 8개 → 3+3+2) */
+      gap: 8px;
+    }
+    .sub-btn {
+      appearance: none;
+      border: 2px solid transparent;
+      background: var(--card);
+      border-radius: 14px;
+      padding: 12px 4px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(232, 80, 63, 0.1);
+      transition: transform 0.12s ease, border-color 0.15s ease, background 0.15s ease;
+      font-family: inherit;
+      font-weight: 700;
+      color: var(--ink);
+      min-height: 60px;        /* 정사각에 가까운 터치 타깃 */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .sub-btn:active { transform: scale(0.96); }
+    /* 라벨: 좁은 3열 폭에서도 읽히도록 글자 크기 자동 축소 + 줄바꿈 허용 */
+    .sub-btn .sub-name {
+      font-size: 0.86rem;
+      line-height: 1.15;
+      word-break: keep-all;   /* 한글 단어 단위 줄바꿈 */
+    }
+    .sub-btn .sub-count { font-size: 0.64rem; font-weight: 500; color: var(--ink-soft); margin-top: 1px; }
+    .sub-btn.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary-dark);
+    }
+
+    /* ===================== 슬롯 / 결과 카드 ===================== */
+    .slot-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px 20px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      min-height: 168px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    /* 카드 상단 장식 바 */
+    .slot-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 6px;
+      background: linear-gradient(90deg, var(--primary), #ffa07a);
+    }
+
+    .slot-hint { color: var(--ink-soft); font-size: 0.88rem; }
+
+    /* 슬롯 릴: 메뉴 이름이 빠르게 바뀌는 영역 */
+    .slot-window {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      overflow: hidden;
+    }
+    .slot-text {
+      font-size: clamp(1.7rem, 8vw, 2.3rem);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--ink);
+      line-height: 1.1;
+    }
+    /* 슬롯이 돌아갈 때 살짝 흐릿하게 흔들리는 효과 */
+    .slot-text.spinning {
+      animation: slotBlur 0.09s linear infinite;
+      color: var(--primary-dark);
+    }
+    @keyframes slotBlur {
+      0%   { transform: translateY(-6px); opacity: 0.55; filter: blur(0.4px); }
+      50%  { transform: translateY(0);    opacity: 1;    filter: blur(0); }
+      100% { transform: translateY(6px);  opacity: 0.55; filter: blur(0.4px); }
+    }
+    /* 최종 당첨 시 통통 튀는 효과 */
+    .slot-text.win {
+      animation: pop 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      color: var(--primary-dark);
+    }
+    @keyframes pop {
+      0%   { transform: scale(0.4); opacity: 0; }
+      60%  { transform: scale(1.12); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+
+    .result-sub {
+      font-size: 0.8rem;
+      color: var(--ink-soft);
+      margin-top: 2px;
+      min-height: 1em;
+    }
+
+    /* ===================== 버튼들 ===================== */
+    .actions { display: flex; flex-direction: column; gap: 10px; }
+    .btn {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 1rem;
+      font-weight: 800;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.15s ease;
+      min-height: 54px;            /* 모바일 터치 권장 높이 */
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: var(--shadow);
+    }
+    .btn-row { display: flex; gap: 10px; }
+    .btn-row .btn { flex: 1; }
+    .btn-ghost {
+      background: #fff;
+      color: var(--primary-dark);
+      border: 2px solid var(--primary-light);
+      box-shadow: none;
+    }
+
+    /* ===================== 히스토리 ===================== */
+    .history {
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 16px;
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: var(--ink-soft);
+    }
+    .history h2 { font-size: 0.78rem; margin: 0 0 6px; color: var(--ink); }
+    .history-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      background: #fff;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.76rem;
+      color: var(--ink);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    /* ===================== 토스트 (복사 알림) ===================== */
+    .toast {
+      position: fixed;
+      bottom: calc(24px + var(--safe-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--ink);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    footer {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--ink-soft);
+      margin-top: 6px;
+      opacity: 0.8;
+    }
+
+    .hidden { display: none !important; }
+
+    /* 모션 줄이기 선호 사용자 배려 */
+    @media (prefers-reduced-motion: reduce) {
+      .slot-text.spinning, .slot-text.win { animation: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <h1>오늘 뭐 먹지? 🍱</h1>
+      <p class="welcome">🌸스치면인연🌸 하남·천호·강동·송파<br />우리 오늘도 맛있는 한끼를 먹어볼까요?</p>
+    </header>
+
+    <!-- STEP 1: 선택 방식(카테고리) -->
+    <div class="step-label">STEP 1 · 어떤 방식으로 메뉴를 선택해 볼까요?</div>
+    <div class="category-grid" id="categoryGrid">
+      <!-- 카테고리 버튼은 JS가 동적으로 생성 -->
+    </div>
+
+    <!-- STEP 2: 서브그룹 선택 (1차 선택 후 등장) -->
+    <div class="subgroup-section hidden" id="subgroupSection">
+      <div class="step-label" id="subgroupLabel">STEP 2 · 세부 항목을 골라주세요</div>
+      <div class="subgroup-grid" id="subgroupGrid">
+        <!-- 서브그룹 버튼은 JS가 동적으로 생성 -->
+      </div>
+    </div>
+
+    <!-- STEP 3: 슬롯 + 결과 (서브그룹 선택 후 등장) -->
+    <div class="slot-card hidden" id="slotCard">
+      <div class="slot-window">
+        <div class="slot-text" id="slotText">?</div>
+      </div>
+      <div class="result-sub" id="resultSub">세부 항목을 고르면 메뉴를 뽑아드려요</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary hidden" id="pickBtn" disabled>🎰 메뉴 뽑기</button>
+      <div class="btn-row hidden" id="resultActions">
+        <button class="btn btn-ghost" id="againBtn">🔄 다시 뽑기</button>
+        <button class="btn btn-ghost" id="shareBtn">📋 공유·복사</button>
+      </div>
+      <button class="btn btn-ghost hidden" id="resetBtn">↩︎ 처음부터 다시 고르기</button>
+    </div>
+
+    <!-- 추천 히스토리 -->
+    <div class="history hidden" id="historyBox">
+      <h2>최근 추천</h2>
+      <div class="history-list" id="historyList"></div>
+    </div>
+
+    <footer>이미지 빙고판 데이터 기반 · 카테고리 › 세부항목 내 무작위 추출</footer>
+  </div>
+
+  <div class="toast" id="toast">복사되었습니다 ✓</div>
+
+  <!-- ===================== 메뉴 데이터 ===================== -->
+  <script>
+    /*
+     * MENU_DATA: 빙고판 3장에서 추출한 메뉴 데이터.
+     * 구조: { 카테고리키: { label, emoji, subgroups: { 서브그룹: [메뉴...] } } }
+     * 동작: 1차로 카테고리 선택 → 2차로 서브그룹(찌개/특식 등) 선택
+     *       → 선택한 서브그룹 배열 안에서 랜덤 상세 메뉴 추출.
+     */
+    const MENU_DATA = {
+      "종합메뉴": {
+        label: "메뉴 카테고리", emoji: "🍱", desc: "큰 메뉴의 카테고리를 선택합니다",
+        subgroups: {
+          "찌개": ["청국장찌개","순두부찌개","고추장찌개","부대찌개","김치찌개","된장찌개","비지찌개","전찌개","동태찌개"],
+          "특식": ["갈비찜","닭볶음탕","스테이크","아귀찜","삼계탕","수육","월남쌈","불고기","찜닭"],
+          "밑반찬": ["연근조림","시금치무침","감자조림","감자채볶음","장조림","진미채볶음","콩조림","콩나물무침","멸치볶음"],
+          "덮밥/볶음밥": ["제육덮밥","비빔밥","오므라이스","카레덮밥","김치볶음밥","오징어덮밥","짜장밥","야채볶음밥","간장밥"],
+          "간식": ["토스트","또띠아피자","떡꼬치","쿠키/과자","떡볶이","호떡","샌드위치","시리얼","팝시클"],
+          "국": ["육개장","떡국","미역국","콩나물국","북엇국","소고기무국","시래깃국","된장국","감잣국"],
+          "야식/술안주": ["두부김치","튀김","소시지야채볶음","콘치즈","골뱅이무침","부침개","어묵탕","닭똥집볶음","순대볶음"],
+          "면": ["라면","토마토스파게티","크림스파게티","잔치국수","비빔국수","칼국수","우동","볶음우동","콩국수"]
+        }
+      },
+      "재료별메뉴": {
+        label: "재료별", emoji: "🥕", desc: "먹고 싶은 재료를 선택합니다",
+        subgroups: {
+          "감자/양파": ["감자채볶음","감자고추장찌개","감자스프","야채죽","감잣국","포테이토피자","감자조림","으깬감자샐러드","감자/양파튀김"],
+          "참치캔": ["참치비빔밥","참치김밥","참치쌈장","참치김치볶음밥","야채참치죽","참치김치전","고추장참치찌개","참치마요덮밥","밥버거"],
+          "돼지고기": ["수육","갈비찜","동파육","김치찜","제육볶음","두루치기","탕수육","목살스테이크","불고기"],
+          "닭고기": ["닭죽","닭볶음탕","찜닭","치킨까스","닭강정","삼계탕","닭갈비","치킨마요덮밥","깐풍기"],
+          "라면": ["토마토냉라면","짜파구리","냉채라면","김치버터라면","대파라면","백종원볶음라면","골뱅이비빔면","라볶이","크림치즈라면"],
+          "찬밥": ["누룽지","볶음밥","밥전","주먹밥","김치밥말아먹기","각종죽","리소토","크로켓"],
+          "자투리채소": ["채소볶음밥","프리타타","비빔밥","채소전","야채볶음","그라탕","잡채","소시지야채볶음","볶음우동"],
+          "달걀": ["계란찜","계란말이","오믈렛","감동란","계란장조림","계란푸딩","계란빵","스카치에그","스터프드에그"]
+        }
+      },
+      "상황별메뉴": {
+        label: "상황별", emoji: "🎯", desc: "현재 나의 상황을 선택합니다",
+        subgroups: {
+          "손님대접": ["라자냐","굴국밥","각종김밥","유부초밥","캘리포니아롤","바게트버거","밥버거","각종샌드위치","투움바파스타"],
+          "해장": ["오징어무국","순두부찌개","콩나물해장국","북엇국","홍합탕","김치콩나물죽","전복죽","추어탕","장어구이"],
+          "간식/야식": ["토스트","또띠아피자","떡꼬치","쿠키","떡볶이","호떡","칠리새우","샌드위치","시리얼","팝시클"],
+          "도시락": ["식이조절","오니기리","스팸무스비","볶음밥","닭가슴살샐러드","오믈렛","토마토달걀볶음","바나나쉐이크","연어덮밥"],
+          "영양식": ["더덕구이","삼계탕","낙지연포탕","훈제오리부추무침","닭죽","갈비탕","전복죽","장어구이","추어탕"],
+          "초스피드": ["치킨마요덮밥","계란찜","오믈렛","프리타타","에그베네딕트","연어덮밥","떡국","만둣국","팬케이크"],
+          "브런치": ["팬케이크","프리타타","에그베네딕트","몬테크리스토","크로크무슈/마담","조개스프","샐러드파스타","불고기부리또","프렌치토스트"],
+          "기타": ["곤약국수","단호박스프","양배추스프","오차즈케","누룽지죽","리코타치즈","해독주스","두부스테이크"]
+        }
+      }
+    };
+  </script>
+
+  <!-- ===================== 앱 로직 ===================== -->
+  <script>
+    "use strict";
+
+    /* ----- 디버깅 로그 헬퍼: 콘솔에 [PickMenu] 접두사로 출력 ----- */
+    const DEBUG = true;
+    function log(...args) { if (DEBUG) console.log("[PickMenu]", ...args); }
+
+    /* ----- DOM 참조 ----- */
+    const categoryGrid    = document.getElementById("categoryGrid");
+    const subgroupSection = document.getElementById("subgroupSection");
+    const subgroupGrid    = document.getElementById("subgroupGrid");
+    const subgroupLabel   = document.getElementById("subgroupLabel");
+    const slotCard        = document.getElementById("slotCard");
+    const slotText        = document.getElementById("slotText");
+    const resultSub       = document.getElementById("resultSub");
+    const pickBtn         = document.getElementById("pickBtn");
+    const resultActions   = document.getElementById("resultActions");
+    const againBtn        = document.getElementById("againBtn");
+    const shareBtn        = document.getElementById("shareBtn");
+    const resetBtn        = document.getElementById("resetBtn");
+    const historyBox      = document.getElementById("historyBox");
+    const historyList     = document.getElementById("historyList");
+    const toast           = document.getElementById("toast");
+
+    /* ----- 앱 상태 ----- */
+    let selectedCategory = null;   // 1차 선택: 카테고리 키
+    let selectedSubgroup = null;   // 2차 선택: 서브그룹 키 (찌개/특식 등)
+    let isSpinning = false;        // 슬롯 회전 중 여부 (중복 클릭 방지)
+    let lastResult = null;         // 마지막 추천 메뉴 (공유용)
+    const history = [];            // 최근 추천 기록 (최대 8개)
+
+    /* getPool(cat): 카테고리 전체 고유 메뉴 수 계산용 (버튼 라벨 표시에만 사용) */
+    function getPool(categoryKey) {
+      const subgroups = MENU_DATA[categoryKey].subgroups;
+      const all = [];
+      for (const key in subgroups) all.push(...subgroups[key]);
+      return [...new Set(all)];
+    }
+
+    /* pickRandom(arr): 배열에서 무작위 1개 반환 */
+    function pickRandom(arr) {
+      const idx = Math.floor(Math.random() * arr.length);
+      return arr[idx];
+    }
+
+    /*
+     * focusElement(el): 2차 선택지/결과가 새로 나타날 때 그 위치로 부드럽게 스크롤.
+     * - 새 영역이 화면 밖이거나 키패드/주소창에 가릴 수 있으므로 시야 중앙으로 이동.
+     * - 레이아웃 반영(애니메이션 시작) 후 스크롤하도록 requestAnimationFrame 사용.
+     */
+    function focusElement(el) {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          log("포커싱 스크롤:", el.id);
+        }, 60);
+      });
+    }
+
+    /*
+     * 1차: 카테고리 버튼 렌더링. (표시 순서: 카테고리 → 상황 → 재료)
+     */
+    function renderCategories() {
+      categoryGrid.innerHTML = "";
+      const order = ["종합메뉴", "상황별메뉴", "재료별메뉴"];
+      order.forEach((key, i) => {
+        const cat = MENU_DATA[key];
+        const count = getPool(key).length;
+
+        const btn = document.createElement("button");
+        btn.className = "cat-btn";
+        btn.type = "button";
+        btn.dataset.key = key;
+        btn.innerHTML =
+          '<span class="num">' + (i + 1) + '</span>' +
+          '<span class="emoji">' + cat.emoji + '</span>' +
+          '<span class="cat-text">' +
+            '<span class="name">' + cat.label + '</span>' +
+            '<span class="desc">' + cat.desc + '</span>' +
+          '</span>' +
+          '<span class="count">' + count + '종</span>';
+        btn.addEventListener("click", () => selectCategory(key));
+        categoryGrid.appendChild(btn);
+      });
+      log("카테고리 렌더 완료:", order.length, "개");
+    }
+
+    /*
+     * 1차 선택 처리: 카테고리 선택 → 해당 카테고리의 서브그룹 버튼들을 렌더링하고
+     * 2차 선택 영역을 노출. (슬롯/결과 영역은 다시 숨김)
+     */
+    function selectCategory(key) {
+      if (isSpinning) return;
+      selectedCategory = key;
+      selectedSubgroup = null;
+      log("1차 카테고리 선택:", key);
+
+      // 카테고리 버튼 선택 상태 갱신
+      document.querySelectorAll(".cat-btn").forEach((b) => {
+        b.classList.toggle("selected", b.dataset.key === key);
+      });
+
+      // 슬롯/결과/뽑기 버튼 초기화 (이전 선택 흔적 제거)
+      slotCard.classList.add("hidden");
+      pickBtn.classList.add("hidden");
+      resultActions.classList.add("hidden");
+      resetBtn.classList.add("hidden");
+      slotText.textContent = "?";
+      slotText.className = "slot-text";
+
+      renderSubgroups(key);
+      subgroupSection.classList.remove("hidden");
+
+      // 2차 선택지가 화면에 나타날 때 그 위치로 포커싱
+      focusElement(subgroupSection);
+    }
+
+    /*
+     * 2차: 서브그룹 버튼 렌더링. 각 버튼에 그룹명 + 메뉴 수 표시.
+     */
+    function renderSubgroups(categoryKey) {
+      const cat = MENU_DATA[categoryKey];
+      subgroupLabel.textContent = "STEP 2 · " + cat.label + " 중 무엇을 고를까요?";
+      subgroupGrid.innerHTML = "";
+
+      for (const groupKey in cat.subgroups) {
+        const items = cat.subgroups[groupKey];
+        const btn = document.createElement("button");
+        btn.className = "sub-btn";
+        btn.type = "button";
+        btn.dataset.group = groupKey;
+        btn.innerHTML =
+          '<span class="sub-name">' + groupKey + '</span>' +
+          '<span class="sub-count">' + items.length + '종</span>';
+        btn.addEventListener("click", () => selectSubgroup(groupKey));
+        subgroupGrid.appendChild(btn);
+      }
+      log("서브그룹 렌더:", Object.keys(cat.subgroups).length, "개");
+    }
+
+    /*
+     * 2차 선택 처리: 서브그룹 선택 → 슬롯 영역 노출 + 뽑기 버튼 활성화.
+     * 선택 즉시 자동으로 한 번 추첨해서 사용자 동선을 줄임.
+     */
+    function selectSubgroup(groupKey) {
+      if (isSpinning) return;
+      selectedSubgroup = groupKey;
+      log("2차 서브그룹 선택:", groupKey);
+
+      // 서브그룹 버튼 선택 상태 갱신
+      document.querySelectorAll(".sub-btn").forEach((b) => {
+        b.classList.toggle("selected", b.dataset.group === groupKey);
+      });
+
+      // 슬롯/뽑기 버튼 노출
+      slotCard.classList.remove("hidden");
+      pickBtn.classList.remove("hidden");
+      pickBtn.disabled = false;
+      pickBtn.textContent = "🎰 " + groupKey + " 메뉴 뽑기";
+      resultActions.classList.add("hidden");
+      resetBtn.classList.remove("hidden");
+      resultSub.textContent = groupKey + " · 준비 완료!";
+      slotText.textContent = "?";
+      slotText.className = "slot-text";
+
+      // 슬롯 영역으로 포커싱 후 자동 추첨 시작
+      focusElement(slotCard);
+      setTimeout(spin, 280);
+    }
+
+    /*
+     * spin(): 슬롯/빙고 애니메이션과 함께 "선택된 서브그룹 안에서" 메뉴를 추출.
+     */
+    function spin() {
+      if (!selectedCategory || !selectedSubgroup || isSpinning) return;
+      isSpinning = true;
+      pickBtn.disabled = true;
+      againBtn.disabled = true;
+      resultActions.classList.add("hidden");
+      resultSub.textContent = "두구두구...";
+
+      // 핵심: 카테고리 전체가 아니라 선택한 서브그룹 배열만 풀로 사용
+      const pool = MENU_DATA[selectedCategory].subgroups[selectedSubgroup];
+      const finalMenu = pickRandom(pool);
+      log("슬롯 시작:", selectedCategory, ">", selectedSubgroup, "(", pool.length, "종 )");
+
+      slotText.className = "slot-text spinning";
+
+      const startTime = performance.now();
+      const totalDuration = 2000;
+      let nextTick = 0;
+
+      function frame(now) {
+        const elapsed = now - startTime;
+        if (elapsed >= totalDuration) { finishSpin(finalMenu); return; }
+        const progress = elapsed / totalDuration;
+        const interval = 40 + progress * progress * 180;   // 감속 연출
+        if (now >= nextTick) {
+          slotText.textContent = pickRandom(pool);
+          nextTick = now + interval;
+        }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    /* 슬롯 종료 처리: 최종 메뉴 확정 + 후속 UI */
+    function finishSpin(menu) {
+      slotText.textContent = menu;
+      slotText.className = "slot-text win";
+      lastResult = menu;
+      isSpinning = false;
+      pickBtn.disabled = false;
+      againBtn.disabled = false;
+
+      resultSub.textContent = "🍴 " + selectedSubgroup + " 추천 메뉴";
+      resultActions.classList.remove("hidden");
+
+      addHistory(menu);
+      log("최종 추천:", menu);
+    }
+
+    /* 처음부터 다시: 모든 선택 초기화 후 1차 카테고리만 남김 */
+    function resetAll() {
+      if (isSpinning) return;
+      selectedCategory = null;
+      selectedSubgroup = null;
+      document.querySelectorAll(".cat-btn").forEach((b) => b.classList.remove("selected"));
+      subgroupSection.classList.add("hidden");
+      slotCard.classList.add("hidden");
+      pickBtn.classList.add("hidden");
+      resultActions.classList.add("hidden");
+      resetBtn.classList.add("hidden");
+      log("초기화(처음부터)");
+      focusElement(categoryGrid);
+    }
+
+    /* 추천 기록에 추가 (앞쪽에 삽입, 최대 8개 유지) */
+    function addHistory(menu) {
+      history.unshift(menu);
+      if (history.length > 8) history.pop();
+
+      historyBox.classList.remove("hidden");
+      historyList.innerHTML = "";
+      history.forEach((m) => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.textContent = m;
+        historyList.appendChild(chip);
+      });
+    }
+
+    /*
+     * 공유·복사: Web Share API 우선 사용(모바일), 미지원 시 클립보드 복사.
+     */
+    async function shareResult() {
+      if (!lastResult) return;
+      const text = "오늘 뭐 먹지? 🍱 추천 메뉴: " + lastResult +
+                   " (" + MENU_DATA[selectedCategory].label + " › " + selectedSubgroup + ")";
+      log("공유 시도:", text);
+
+      // 1순위: 네이티브 공유 시트 (모바일)
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "오늘 뭐 먹지?", text });
+          log("Web Share 성공");
+          return;
+        } catch (e) {
+          log("Web Share 취소/실패 → 클립보드로 폴백", e);
+        }
+      }
+
+      // 2순위: 클립보드 복사
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("복사되었습니다 ✓");
+        log("클립보드 복사 성공");
+      } catch (e) {
+        // 3순위: execCommand 폴백 (구형 브라우저)
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); showToast("복사되었습니다 ✓"); }
+        catch (e2) { showToast("복사 실패 😢"); log("복사 실패", e2); }
+        document.body.removeChild(ta);
+      }
+    }
+
+    /* 토스트 메시지 표시 */
+    let toastTimer = null;
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
+    }
+
+    /* ----- 이벤트 바인딩 ----- */
+    pickBtn.addEventListener("click", spin);
+    againBtn.addEventListener("click", spin);
+    shareBtn.addEventListener("click", shareResult);
+    resetBtn.addEventListener("click", resetAll);
+
+    /* ----- 초기화 ----- */
+    renderCategories();
+    log("앱 초기화 완료");
+  </script>
+</body>
+</html>
