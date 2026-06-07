@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   =====================================================================
-  오늘 뭐 먹지? - 자취생 메뉴 랜덤 추천 (PickMenu)
+  오늘 뭐 먹지? - 한끼 메뉴 추천 (PickMenu)
   ---------------------------------------------------------------------
   • 단일 HTML 파일로 동작 (외부 빌드/의존성 없음 → GitHub Pages 바로 배포)
   • 동작 흐름:
@@ -19,8 +19,8 @@
   <!-- 모바일 최적화: 기기 너비에 맞추고 사용자 확대 허용 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#ff6b5b" />
-  <meta name="description" content="자취생을 위한 오늘의 메뉴 랜덤 추천. 종합·재료별·상황별로 골라보세요." />
-  <title>오늘 뭐 먹지? 🍱 자취생 메뉴 추천</title>
+  <meta name="description" content="오늘의 한끼 메뉴 추천. 종합·재료별·상황별로 골라보세요." />
+  <title>오늘 뭐 먹지? 🍱 한끼 메뉴 추천</title>
 
   <style>
     /* ===================== 디자인 토큰 (색/간격) ===================== */
@@ -99,8 +99,11 @@
     .category-grid {
       display: flex;
       flex-direction: column;
+      align-items: center;     /* 버튼 묶음 가운데 정렬 */
       gap: 10px;
     }
+    /* 각 카테고리 행(wrapper) — 항상 폭을 꽉 채워 3개 버튼 너비를 동일하게 */
+    .cat-row { width: 100%; }
     /* 선택 방식 버튼: 번호 + 이모지 + 이름/설명 + 메뉴 수 (가로 배치) */
     .cat-btn {
       appearance: none;
@@ -116,9 +119,13 @@
       align-items: center;
       gap: 12px;
       min-height: 64px;           /* 터치 타깃 충분히 크게 */
+      width: 100%;                /* 행 전체 너비 → 3개 버튼 동일 크기 */
+      box-sizing: border-box;
       font-family: inherit;
       text-align: left;
     }
+    /* desc(설명)는 한 줄로 고정해 버튼 높이도 동일하게 유지 */
+    .cat-btn .desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cat-btn:active { transform: scale(0.98); }
     .cat-btn .num {
       flex: 0 0 26px;
@@ -269,17 +276,17 @@
       word-break: keep-all;
       transition: background 0.05s linear, color 0.05s linear, transform 0.05s linear;
     }
-    /* 빛이 머무는 칸 (이동 중 하이라이트) */
+    /* 빛이 머무는 칸 (이동 중 하이라이트) — 푸른 계열 */
     .roul-cell.lit {
-      background: var(--primary);
+      background: #3b82f6;       /* blue-500 */
       color: #fff;
       transform: scale(1.06);
     }
-    /* 최종 당첨 칸 */
+    /* 최종 당첨 칸 — 진한 푸른색 */
     .roul-cell.win {
-      background: var(--primary-dark);
+      background: #1d4ed8;       /* blue-700 */
       color: #fff;
-      border-color: var(--primary-dark);
+      border-color: #1d4ed8;
       animation: pop 0.45s cubic-bezier(0.18, 0.89, 0.32, 1.28);
     }
     @keyframes pop {
@@ -410,7 +417,6 @@
       </div>
 
       <div class="actions">
-        <button class="btn btn-primary hidden" id="pickBtn" disabled>🎰 메뉴 뽑기</button>
         <div class="btn-row hidden" id="resultActions">
           <button class="btn btn-ghost" id="againBtn">🔄 다시 뽑기</button>
           <button class="btn btn-ghost" id="shareBtn">📋 공유·복사</button>
@@ -419,16 +425,8 @@
       </div>
     </div>
 
-    <!-- 추천 히스토리 -->
-    <div class="history hidden" id="historyBox">
-      <h2>최근 추천</h2>
-      <div class="history-list" id="historyList"></div>
-    </div>
-
     <footer>이미지 빙고판 데이터 기반 · 카테고리 › 세부항목 내 무작위 추출</footer>
   </div>
-
-  <div class="toast" id="toast">복사되었습니다 ✓</div>
 
   <!-- ===================== 메뉴 데이터 ===================== -->
   <script>
@@ -498,14 +496,10 @@
     const slotCard        = document.getElementById("slotCard");
     const roulette        = document.getElementById("roulette");
     const resultSub       = document.getElementById("resultSub");
-    const pickBtn         = document.getElementById("pickBtn");
     const resultActions   = document.getElementById("resultActions");
     const againBtn        = document.getElementById("againBtn");
     const shareBtn        = document.getElementById("shareBtn");
     const resetBtn        = document.getElementById("resetBtn");
-    const historyBox      = document.getElementById("historyBox");
-    const historyList     = document.getElementById("historyList");
-    const toast           = document.getElementById("toast");
 
     /* ----- 앱 상태 ----- */
     let selectedCategory = null;   // 1차 선택: 카테고리 키
@@ -514,7 +508,6 @@
     let lastResult = null;         // 마지막 추천 메뉴 (공유용)
     // 서브그룹별 직전 결과를 기억 → 같은 그룹에서 연속 추첨 시 동일 결과 회피
     const lastResultBySub = {};
-    const history = [];            // 최근 추천 기록 (최대 8개)
 
     /* getPool(cat): 카테고리 전체 고유 메뉴 수 계산용 (버튼 라벨 표시에만 사용) */
     function getPool(categoryKey) {
@@ -600,9 +593,8 @@
       row.insertAdjacentElement("afterend", drilldownPanel);
       drilldownPanel.classList.remove("hidden");
 
-      // 룰렛/결과/뽑기 버튼 초기화 (이전 선택 흔적 제거)
+      // 룰렛/결과 초기화 (이전 선택 흔적 제거)
       slotCard.classList.add("hidden");
-      pickBtn.classList.add("hidden");
       resultActions.classList.add("hidden");
       resetBtn.classList.add("hidden");
       roulette.innerHTML = "";
@@ -650,11 +642,8 @@
         b.classList.toggle("selected", b.dataset.group === groupKey);
       });
 
-      // 룰렛/뽑기 버튼 노출
+      // 룰렛 노출 (뽑기 버튼 없이 자동 추첨)
       slotCard.classList.remove("hidden");
-      pickBtn.classList.remove("hidden");
-      pickBtn.disabled = false;
-      pickBtn.textContent = "🎰 " + groupKey + " 메뉴 뽑기";
       resultActions.classList.add("hidden");
       resetBtn.classList.remove("hidden");
       resultSub.textContent = groupKey + " · 준비 완료!";
@@ -692,13 +681,14 @@
     function spin() {
       if (!selectedCategory || !selectedSubgroup || isSpinning) return;
       isSpinning = true;
-      pickBtn.disabled = true;
       againBtn.disabled = true;
       resultActions.classList.add("hidden");
       resultSub.textContent = "두구두구...";
 
       const pool = MENU_DATA[selectedCategory].subgroups[selectedSubgroup];
       const cells = roulette.querySelectorAll(".roul-cell");
+      // 이전 추첨 결과(당첨 강조) 초기화 — 다시 뽑기 시 이전 결과가 화면에 남지 않도록
+      cells.forEach((c) => c.classList.remove("win", "lit"));
 
       // --- 최종 당첨 인덱스 결정: 직전 결과와 다르게 ---
       const prev = lastResultBySub[selectedSubgroup];
@@ -758,13 +748,10 @@
       lastResult = menu;
       lastResultBySub[selectedSubgroup] = menu;   // 다음 추첨 중복 회피용 기록
       isSpinning = false;
-      pickBtn.disabled = false;
       againBtn.disabled = false;
 
       resultSub.textContent = "🍴 오늘의 추천: " + menu;
       resultActions.classList.remove("hidden");
-
-      addHistory(menu);
       log("최종 추천:", menu);
     }
 
@@ -776,7 +763,6 @@
       document.querySelectorAll(".cat-btn").forEach((b) => b.classList.remove("selected"));
       drilldownPanel.classList.add("hidden");
       slotCard.classList.add("hidden");
-      pickBtn.classList.add("hidden");
       resultActions.classList.add("hidden");
       resetBtn.classList.add("hidden");
       roulette.innerHTML = "";
@@ -784,21 +770,6 @@
       categoryGrid.appendChild(drilldownPanel);
       log("초기화(처음부터)");
       focusElement(categoryGrid);
-    }
-
-    /* 추천 기록에 추가 (앞쪽에 삽입, 최대 8개 유지) */
-    function addHistory(menu) {
-      history.unshift(menu);
-      if (history.length > 8) history.pop();
-
-      historyBox.classList.remove("hidden");
-      historyList.innerHTML = "";
-      history.forEach((m) => {
-        const chip = document.createElement("span");
-        chip.className = "chip";
-        chip.textContent = m;
-        historyList.appendChild(chip);
-      });
     }
 
     /*
@@ -835,18 +806,8 @@
       log("URL 복사 결과:", ok);
     }
 
-    /* 토스트 메시지 표시 */
-    let toastTimer = null;
-    function showToast(msg) {
-      toast.textContent = msg;
-      toast.classList.add("show");
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
-    }
-
     /* ----- 이벤트 바인딩 ----- */
-    pickBtn.addEventListener("click", spin);
-    againBtn.addEventListener("click", spin);
+    againBtn.addEventListener("click", spin);        // 다시 뽑기 = 룰렛 재실행
     shareBtn.addEventListener("click", shareResult);
     resetBtn.addEventListener("click", resetAll);
 
